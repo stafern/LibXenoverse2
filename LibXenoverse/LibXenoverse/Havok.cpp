@@ -204,9 +204,18 @@ bool Havok::Load(const uint8_t *buf, size_t size)
 
 
 	Havok_Version* version_info = (Havok_Version*)GetOffsetPtr(buf, offset, true);
-	if ((memcmp(version_info->year, Havok_v2015_SIGNATURE, 4) != 0) || (memcmp(version_info->major, Havok_major01_SIGNATURE, 2) != 0) || (memcmp(version_info->minor, Havok_minor00_SIGNATURE, 2) != 0))
+
+	bool isVersion2015 = (memcmp(version_info->year, Havok_v2015_SIGNATURE, 4) == 0 &&
+						  memcmp(version_info->major, Havok_major01_SIGNATURE, 2) == 0 &&
+						  memcmp(version_info->minor, Havok_minor00_SIGNATURE, 2) == 0);
+
+	bool isVersion2020 = (memcmp(version_info->year, Havok_v2020_SIGNATURE, 4) == 0 &&
+						  memcmp(version_info->major, Havok_major01_SIGNATURE, 2) == 0 &&
+						  memcmp(version_info->minor, Havok_minor00_SIGNATURE, 2) == 0);
+
+	if (!isVersion2015 && !isVersion2020)
 	{
-		printf("error: havok's version request : %s.%s.%s\n", Havok_v2015_SIGNATURE, Havok_major01_SIGNATURE, Havok_minor00_SIGNATURE);
+		printf("error: unsupported havok version: %.4s.%.2s.%.2s\n", version_info->year, version_info->major, version_info->minor);
 		notifyError();
 		return false;
 	}
@@ -249,7 +258,8 @@ bool Havok::Load(const uint8_t *buf, size_t size)
 
 
 
-				if (memcmp(type_subpart_hdr->signature, Havok_TSTR_SIGNATURE, 4) == 0)
+				if (memcmp(type_subpart_hdr->signature, Havok_TSTR_SIGNATURE, 4) == 0 ||
+					memcmp(type_subpart_hdr->signature, Havok_TST1_SIGNATURE, 4) == 0)
 				{
 					size_t offset_tmp = 0;
 					size_t inc = 0;
@@ -264,9 +274,9 @@ bool Havok::Load(const uint8_t *buf, size_t size)
 
 
 
-				}else if (memcmp(type_subpart_hdr->signature, Havok_TNAM_SIGNATURE, 4) == 0) {
-
-					
+				}else if (memcmp(type_subpart_hdr->signature, Havok_TNAM_SIGNATURE, 4) == 0 || 
+						  memcmp(type_subpart_hdr->signature, Havok_TNA1_SIGNATURE, 4) == 0)
+				{					
 					size_t nbBytes = 0;
 					size_t nbTypes = readPacked(buf + offset, size - offset, nbBytes);
 
@@ -278,7 +288,15 @@ bool Havok::Load(const uint8_t *buf, size_t size)
 					{
 						Havok_TagType* tagType = listType.at(i);
 
-						tagType->name = listTSTR.at(readPacked(buf + offset_tmp, size - offset_tmp, nbBytes));
+						//Skip if FF is Read
+						size_t nameIndex = readPacked(buf + offset_tmp, size - offset_tmp, nbBytes);
+						if (nbBytes == 0 || nameIndex >= listTSTR.size()) {
+							printf("Warning: invalid TNAM nameIndex at 0x%zX\n", offset_tmp);
+							offset_tmp++;
+							continue;
+						}
+						tagType->name = listTSTR.at(nameIndex);
+
 						offset_tmp += nbBytes;
 
 						size_t nbNextValues = readPacked(buf + offset_tmp, size - offset_tmp, nbBytes);
@@ -304,30 +322,38 @@ bool Havok::Load(const uint8_t *buf, size_t size)
 					offset += type_subpart_hdr_size - sizeof(Havok_PartHeader);
 
 
-				}else if (memcmp(type_subpart_hdr->signature, Havok_FSTR_SIGNATURE, 4) == 0) {
-
+				}else if (memcmp(type_subpart_hdr->signature, Havok_FSTR_SIGNATURE, 4) == 0 ||
+						  memcmp(type_subpart_hdr->signature, Havok_FST1_SIGNATURE, 4) == 0)
+				{
 					size_t offset_tmp = 0;
 					size_t inc = 0;
 					while (offset_tmp < type_subpart_hdr_size - sizeof(Havok_PartHeader))
 					{
-						char* char_ptr = (char*)GetOffsetPtr(buf, offset + offset_tmp, true);
-						string str = string(char_ptr);
+						const uint8_t* p = (const uint8_t*)GetOffsetPtr(buf, offset + offset_tmp, true);
+
+						if (p[0] == 0xFF)  // End when FF is Read
+							break;
+
+						string str = string((char*)p);
 						listFSTR.push_back(string(str));
 						offset_tmp += str.length() + 1;
 					}
 
 					offset += type_subpart_hdr_size - sizeof(Havok_PartHeader);
 
-
-
 				}
-				else if (memcmp(type_subpart_hdr->signature, Havok_TBOD_SIGNATURE, 4) == 0) {
-
+				else if (memcmp(type_subpart_hdr->signature, Havok_TBOD_SIGNATURE, 4) == 0 ||
+						 memcmp(type_subpart_hdr->signature, Havok_TBDY_SIGNATURE, 4) == 0)
+				{
 					size_t offset_tmp = 0;
 					size_t nbBytes = 0;
 					while (offset_tmp<type_subpart_hdr_size - sizeof(Havok_PartHeader))
 					{
 						size_t typeIndex = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+						if (nbBytes == 0 || typeIndex >= listType.size()) {
+							offset_tmp++; continue;  //Skip if abnormal value is Read
+						}
+
 						offset_tmp += nbBytes;
 
 						if (typeIndex == 0)						//sequence of 0 padding
@@ -336,6 +362,9 @@ bool Havok::Load(const uint8_t *buf, size_t size)
 						Havok_TagType* tagType = listType.at(typeIndex);
 
 						size_t typeIndexParent = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+						if (nbBytes == 0 || typeIndexParent >= listType.size()) {
+							offset_tmp++; continue;
+						}
 						offset_tmp += nbBytes;
 						tagType->parent = listType.at(typeIndexParent);
 
@@ -395,6 +424,11 @@ bool Havok::Load(const uint8_t *buf, size_t size)
 						{
 							size_t nbMembers = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
 							offset_tmp += nbBytes;
+
+							//If the number of members is too large, read only the last byte
+							if (nbMembers > 0x1000) {
+								nbMembers &= 0xFF;
+							}
 
 							for (size_t i = 0; i < nbMembers; i++)
 							{
@@ -1496,8 +1530,10 @@ bool Havok::import_Xml(TiXmlElement* rootNode)
 	listItem.clear();
 	std::vector<bool> listIsCopyed;
 	listIsCopyed.resize(nbItems, false);
-	std::vector<size_t> listStart_forEachId;			//to avoid to have 2 same items
-	listStart_forEachId.resize(nbTypes, 0);
+
+	//std::vector<size_t> listStart_forEachId;			//to avoid to have 2 same items
+	//listStart_forEachId.resize(nbTypes, 0);
+
 	size_t typeId = 0;
 	string str;
 	
@@ -1505,17 +1541,19 @@ bool Havok::import_Xml(TiXmlElement* rootNode)
 	for (TiXmlElement* node = node_Item->FirstChildElement("Item"); node; node = node->NextSiblingElement("Item"))
 	{
 		node->QueryUnsignedAttribute("type", &typeId);
+		unsigned int xml_count = 0;
+		node->QueryUnsignedAttribute("count", &xml_count);
 
 		if (typeId >= nbTypes)
 			continue;
 
-		for (size_t i = listStart_forEachId.at(typeId); i < nbItems; i++)
+		for (size_t i = 0; i < nbItems; i++)
 		{
-			if (listNoOrderer.at(i)->type->id== typeId)
+			if (listNoOrderer.at(i)->type->id == typeId && listNoOrderer.at(i)->value.size() == xml_count)
 			{
 				listItem.push_back(listNoOrderer.at(i));
 				listIsCopyed.at(i) = true;
-				listStart_forEachId.at(typeId) = i + 1;						//to get another (same if same id)
+				//listStart_forEachId.at(typeId) = i + 1;						//to get another (same if same id)
 
 				listItem.back()->importXml(node);
 				break;
@@ -1707,6 +1745,25 @@ bool Havok_TagObject::importXml(TiXmlElement* node, std::vector<Havok_TagType*> 
 
 	bool isPtr = false;
 	bool isParentPtr = false;
+
+	//Processing to register a string to an Item
+	if (type->id == 7 && node->FirstChildElement("Object")) {
+
+		Havok_TagItem* item = new Havok_TagItem();
+		item->type = listType.at(13);
+		item->isPtr = false;
+
+		for (TiXmlElement* subNode = node->FirstChildElement("Object"); subNode; subNode = subNode->NextSiblingElement("Object"))
+		{
+			Havok_TagObject* charObj = new Havok_TagObject();
+			charObj->importXml(subNode, listType, listItems, 0, 0, level + 1);
+			item->value.push_back(charObj);
+		}
+
+		listItems.push_back(item);
+
+		return true;
+	}
 
 
 	if (supertype->subType() == Havok::TST_Bool)
@@ -2659,13 +2716,19 @@ void Havok::writeObject(Havok_TagObject* obj, std::vector<byte> &listBytesData, 
 	}
 
 
-	if (listBytesData.size() - statOffset != type->byteSize)
-	{
+	if (listBytesData.size() - statOffset < type->byteSize)	{
 		printf("warning : dataSize = %i is different of %i.\n", listBytesData.size() - statOffset, type->byteSize);
 		LibXenoverse::notifyWarning();
 
 		for (size_t i = listBytesData.size() - statOffset; i < type->byteSize; i++)
 			listBytesData.push_back(0);							//padding  0
+	}
+	else if (listBytesData.size() - statOffset > type->byteSize) {
+		printf("warning : dataSize = %i is different of %i.\n", listBytesData.size() - statOffset, type->byteSize);
+		LibXenoverse::notifyWarning();
+
+		for (size_t i = listBytesData.size() - statOffset; i > type->byteSize; i--)
+			listBytesData.pop_back();							//If the write size is wrong, adjust it (tentative solution)
 	}
 
 	printf("**** End writeObject(%i) at %s \n", type->id, UnsignedToString(listBytesData.size(), true).c_str());
@@ -2709,6 +2772,11 @@ std::vector<Havok_TagObject*> Havok::readItemPtr(const uint8_t *buf, size_t size
 \-------------------------------------------------------------------------------*/
 uint32_t Havok::readPacked(const uint8_t *buf, size_t size, size_t &nbBytes)				//apparently the 3 first left bits is for definied the size (in bytes) of the value:
 {
+	if (buf[0] == 0xFF) {
+		nbBytes = 0;  //FF is judged as invalid value
+		return 0;
+	}
+
 	uint32_t value = buf[0];
 	nbBytes = 1;
 

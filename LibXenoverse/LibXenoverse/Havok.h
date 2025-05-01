@@ -41,6 +41,13 @@ namespace LibXenoverse
 #define Havok_INDX_SIGNATURE "INDX"
 #define Havok_ITEM_SIGNATURE "ITEM"
 
+//for EDF6
+#define Havok_v2020_SIGNATURE "2020"
+#define Havok_TST1_SIGNATURE "TST1"
+#define Havok_TNA1_SIGNATURE "TNA1"
+#define Havok_FST1_SIGNATURE "FST1"
+#define Havok_TBDY_SIGNATURE "TBDY"
+
 
 struct Havok_PartHeader
 {

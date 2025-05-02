@@ -91,16 +91,9 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="BinColorTag.h" />
-    <ClInclude Include="EMO.h" />
     <ClInclude Include="EMO_BaseFile.h" />
     <ClInclude Include="EMO_common.h" />
-    <ClInclude Include="EMO_Skeleton.h" />
     <ClInclude Include="Havok.h" />
-    <ClInclude Include="HLSLASM.h" />
-    <ClInclude Include="Uasset.h" />
-    <ClInclude Include="UassetUexp.h" />
-    <ClInclude Include="Uexp.h" />
     <ClInclude Include="XenoFiles.h" />
     <ClInclude Include="half.h" />
     <ClInclude Include="LibXenoverse.h" />
@@ -110,16 +103,8 @@
     <ClInclude Include="tinyxml\tinyxml.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BinColorTag.cpp" />
-    <ClCompile Include="EMO.cpp" />
-    <ClCompile Include="EMOBinColor.cpp" />
     <ClCompile Include="EMO_BaseFile.cpp" />
-    <ClCompile Include="EMO_Skeleton.cpp" />
     <ClCompile Include="Havok.cpp" />
-    <ClCompile Include="HLSLASM.cpp" />
-    <ClCompile Include="Uasset.cpp" />
-    <ClCompile Include="UassetUexp.cpp" />
-    <ClCompile Include="Uexp.cpp" />
     <ClCompile Include="XenoFiles.cpp" />
     <ClCompile Include="half.cpp" />
     <ClCompile Include="XenoMath.cpp" />

@@ -33,31 +33,8 @@
 // Xenoverse Includes
 #include "XenoFiles.h"
 #include "XenoMath.h"
-#include "HLSLASM.h"
-#include "AUR.h"
-#include "EAN.h"
-#include "EMB.h"
-#include "EMD.h"
-#include "EMO.h"
-#include "EMA.h"
-#include "EMM.h"
-#include "SDS.h"
-#include "EMZ.h"
-#include "ESK.h"
-#include "NSK.h"
-#include "IGGYTEX.h"
-#include "Fmp.h"
-#include "Etr.h"
-#include "EMP.h"
-#include "Scd.h"
-#include "Spm.h"
 #include "Havok.h"
-#include "Obl.h"
-#include "Uasset.h"
-#include "Uexp.h"
-#include "UassetUexp.h"
-#include "mdl_yo3.h"
-
+//#include "UassetUexp.h"
 
 
 using namespace std;

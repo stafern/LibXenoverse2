@@ -99,15 +99,6 @@
     <ClInclude Include="XenoFiles.h">
       <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="HLSLASM.h">
-      <Filter>XPU/XVU</Filter>
-    </ClInclude>
-    <ClInclude Include="EMO.h">
-      <Filter>EMO</Filter>
-    </ClInclude>
-    <ClInclude Include="EMO_Skeleton.h">
-      <Filter>EMO</Filter>
-    </ClInclude>
     <ClInclude Include="EMO_BaseFile.h">
       <Filter>EMO</Filter>
     </ClInclude>
@@ -119,18 +110,6 @@
     </ClInclude>
     <ClInclude Include="Havok.h">
       <Filter>Havok</Filter>
-    </ClInclude>
-    <ClInclude Include="BinColorTag.h">
-      <Filter>Common</Filter>
-    </ClInclude>
-    <ClInclude Include="Uasset.h">
-      <Filter>UassetUexp</Filter>
-    </ClInclude>
-    <ClInclude Include="UassetUexp.h">
-      <Filter>UassetUexp</Filter>
-    </ClInclude>
-    <ClInclude Include="Uexp.h">
-      <Filter>UassetUexp</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -155,15 +134,6 @@
     <ClCompile Include="XenoFiles.cpp">
       <Filter>Common</Filter>
     </ClCompile>
-    <ClCompile Include="HLSLASM.cpp">
-      <Filter>XPU/XVU</Filter>
-    </ClCompile>
-    <ClCompile Include="EMO.cpp">
-      <Filter>EMO</Filter>
-    </ClCompile>
-    <ClCompile Include="EMO_Skeleton.cpp">
-      <Filter>EMO</Filter>
-    </ClCompile>
     <ClCompile Include="EMO_BaseFile.cpp">
       <Filter>EMO</Filter>
     </ClCompile>
@@ -172,21 +142,6 @@
     </ClCompile>
     <ClCompile Include="Havok.cpp">
       <Filter>Havok</Filter>
-    </ClCompile>
-    <ClCompile Include="BinColorTag.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
-    <ClCompile Include="EMOBinColor.cpp">
-      <Filter>EMO</Filter>
-    </ClCompile>
-    <ClCompile Include="Uasset.cpp">
-      <Filter>UassetUexp</Filter>
-    </ClCompile>
-    <ClCompile Include="Uexp.cpp">
-      <Filter>UassetUexp</Filter>
-    </ClCompile>
-    <ClCompile Include="UassetUexp.cpp">
-      <Filter>UassetUexp</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

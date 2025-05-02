@@ -188,3 +188,4 @@ data2/
 /CMakeLists.txt
 /bin/Debug
 /LibXenoverse/LibXenoverse/LibXenoverse.vcxproj.user
+/LibXenoverse/XenoXmlConverter/XenoXmlConverter.vcxproj.user

@@ -7,6 +7,7 @@
 #include <functional> 
 #include <cctype>
 #include <locale>
+#include "EMO_common.h"
 
 namespace LibXenoverse
 {

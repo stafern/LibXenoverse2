@@ -21,7 +21,8 @@ namespace LibXenoverse
 #endif
 
 #ifdef FBX_SUPPORT
-#include <fbxsdk.h>
+#undef FBX_SUPPORT
+//#include <fbxsdk.h>
 #endif
 
 #ifdef _MSC_VER

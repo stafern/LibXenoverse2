@@ -185,3 +185,6 @@ data2/
 /LibXenoverse.VC.VC.opendb
 /.vs
 /lib
+/CMakeLists.txt
+/bin/Debug
+/LibXenoverse/LibXenoverse/LibXenoverse.vcxproj.user

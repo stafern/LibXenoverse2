@@ -87,18 +87,6 @@
     <ClInclude Include="tinyxml\tinyxml.h">
       <Filter>External\tinyxml</Filter>
     </ClInclude>
-    <ClInclude Include="EMD.h">
-      <Filter>EMD</Filter>
-    </ClInclude>
-    <ClInclude Include="ESK.h">
-      <Filter>ESK</Filter>
-    </ClInclude>
-    <ClInclude Include="EMM.h">
-      <Filter>EMM</Filter>
-    </ClInclude>
-    <ClInclude Include="EMB.h">
-      <Filter>EMB</Filter>
-    </ClInclude>
     <ClInclude Include="half.h">
       <Filter>External</Filter>
     </ClInclude>
@@ -111,23 +99,11 @@
     <ClInclude Include="XenoFiles.h">
       <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="EMZ.h">
-      <Filter>EMZ</Filter>
-    </ClInclude>
     <ClInclude Include="HLSLASM.h">
       <Filter>XPU/XVU</Filter>
     </ClInclude>
-    <ClInclude Include="EAN.h">
-      <Filter>EAN</Filter>
-    </ClInclude>
-    <ClInclude Include="IGGYTEX.h">
-      <Filter>IGGYTEX</Filter>
-    </ClInclude>
     <ClInclude Include="EMO.h">
       <Filter>EMO</Filter>
-    </ClInclude>
-    <ClInclude Include="EMG.h">
-      <Filter>EMG</Filter>
     </ClInclude>
     <ClInclude Include="EMO_Skeleton.h">
       <Filter>EMO</Filter>
@@ -138,41 +114,11 @@
     <ClInclude Include="EMO_common.h">
       <Filter>EMO</Filter>
     </ClInclude>
-    <ClInclude Include="SDS.h">
-      <Filter>SDS</Filter>
-    </ClInclude>
-    <ClInclude Include="NSK.h">
-      <Filter>NSK</Filter>
-    </ClInclude>
-    <ClInclude Include="EMA.h">
-      <Filter>EMA</Filter>
-    </ClInclude>
-    <ClInclude Include="AUR.h">
-      <Filter>AUR</Filter>
-    </ClInclude>
     <ClInclude Include="stdafx.h">
       <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="Fmp.h">
-      <Filter>FMP</Filter>
-    </ClInclude>
-    <ClInclude Include="Etr.h">
-      <Filter>ETR</Filter>
-    </ClInclude>
-    <ClInclude Include="EMP.h">
-      <Filter>EMP</Filter>
-    </ClInclude>
-    <ClInclude Include="spm.h">
-      <Filter>SPM</Filter>
-    </ClInclude>
     <ClInclude Include="Havok.h">
       <Filter>Havok</Filter>
-    </ClInclude>
-    <ClInclude Include="scd.h">
-      <Filter>SCD</Filter>
-    </ClInclude>
-    <ClInclude Include="obl.h">
-      <Filter>OBL</Filter>
     </ClInclude>
     <ClInclude Include="BinColorTag.h">
       <Filter>Common</Filter>
@@ -185,9 +131,6 @@
     </ClInclude>
     <ClInclude Include="Uexp.h">
       <Filter>UassetUexp</Filter>
-    </ClInclude>
-    <ClInclude Include="mdl_yo3.h">
-      <Filter>Mdl</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -203,51 +146,6 @@
     <ClCompile Include="tinyxml\tinystr.cpp">
       <Filter>External\tinyxml</Filter>
     </ClCompile>
-    <ClCompile Include="EMD.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDMesh.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDModel.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDSubmesh.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDVertex.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="ESK.cpp">
-      <Filter>ESK</Filter>
-    </ClCompile>
-    <ClCompile Include="EMM.cpp">
-      <Filter>EMM</Filter>
-    </ClCompile>
-    <ClCompile Include="EMB.cpp">
-      <Filter>EMB</Filter>
-    </ClCompile>
-    <ClCompile Include="EMBFile.cpp">
-      <Filter>EMB</Filter>
-    </ClCompile>
-    <ClCompile Include="ESKBone.cpp">
-      <Filter>ESK</Filter>
-    </ClCompile>
-    <ClCompile Include="ESKFBX.cpp">
-      <Filter>ESK</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDTriangles.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDSubmeshDefinition.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDImportFBX.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDExportFBX.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
     <ClCompile Include="half.cpp">
       <Filter>External</Filter>
     </ClCompile>
@@ -257,41 +155,11 @@
     <ClCompile Include="XenoFiles.cpp">
       <Filter>Common</Filter>
     </ClCompile>
-    <ClCompile Include="EMZ.cpp">
-      <Filter>EMZ</Filter>
-    </ClCompile>
     <ClCompile Include="HLSLASM.cpp">
       <Filter>XPU/XVU</Filter>
     </ClCompile>
-    <ClCompile Include="EAN.cpp">
-      <Filter>EAN</Filter>
-    </ClCompile>
-    <ClCompile Include="EANAnimation.cpp">
-      <Filter>EAN</Filter>
-    </ClCompile>
-    <ClCompile Include="EANAnimationNode.cpp">
-      <Filter>EAN</Filter>
-    </ClCompile>
-    <ClCompile Include="EANKeyframe.cpp">
-      <Filter>EAN</Filter>
-    </ClCompile>
-    <ClCompile Include="EANKeyframedAnimation.cpp">
-      <Filter>EAN</Filter>
-    </ClCompile>
-    <ClCompile Include="EMBExportFx.cpp">
-      <Filter>EMB</Filter>
-    </ClCompile>
-    <ClCompile Include="IGGYTEX.cpp">
-      <Filter>IGGYTEX</Filter>
-    </ClCompile>
-    <ClCompile Include="IGGYTEXFile.cpp">
-      <Filter>IGGYTEX</Filter>
-    </ClCompile>
     <ClCompile Include="EMO.cpp">
       <Filter>EMO</Filter>
-    </ClCompile>
-    <ClCompile Include="EMG.cpp">
-      <Filter>EMG</Filter>
     </ClCompile>
     <ClCompile Include="EMO_Skeleton.cpp">
       <Filter>EMO</Filter>
@@ -299,68 +167,14 @@
     <ClCompile Include="EMO_BaseFile.cpp">
       <Filter>EMO</Filter>
     </ClCompile>
-    <ClCompile Include="SDS.cpp">
-      <Filter>SDS</Filter>
-    </ClCompile>
-    <ClCompile Include="NSK.cpp">
-      <Filter>NSK</Filter>
-    </ClCompile>
-    <ClCompile Include="EMA.cpp">
-      <Filter>EMA</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDXml.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
-    <ClCompile Include="ESKXml.cpp">
-      <Filter>ESK</Filter>
-    </ClCompile>
-    <ClCompile Include="EANXml.cpp">
-      <Filter>EAN</Filter>
-    </ClCompile>
-    <ClCompile Include="AUR.cpp">
-      <Filter>AUR</Filter>
-    </ClCompile>
     <ClCompile Include="stdafx.cpp">
       <Filter>Common</Filter>
-    </ClCompile>
-    <ClCompile Include="Fmp.cpp">
-      <Filter>FMP</Filter>
-    </ClCompile>
-    <ClCompile Include="Etr.cpp">
-      <Filter>ETR</Filter>
-    </ClCompile>
-    <ClCompile Include="EMP.cpp">
-      <Filter>EMP</Filter>
-    </ClCompile>
-    <ClCompile Include="spm.cpp">
-      <Filter>SPM</Filter>
     </ClCompile>
     <ClCompile Include="Havok.cpp">
       <Filter>Havok</Filter>
     </ClCompile>
-    <ClCompile Include="scd.cpp">
-      <Filter>SCD</Filter>
-    </ClCompile>
-    <ClCompile Include="obl.cpp">
-      <Filter>OBL</Filter>
-    </ClCompile>
-    <ClCompile Include="EMDBinColor.cpp">
-      <Filter>EMD</Filter>
-    </ClCompile>
     <ClCompile Include="BinColorTag.cpp">
       <Filter>Common</Filter>
-    </ClCompile>
-    <ClCompile Include="EMMBinColor.cpp">
-      <Filter>EMM</Filter>
-    </ClCompile>
-    <ClCompile Include="ESK_FpfXml.cpp">
-      <Filter>ESK</Filter>
-    </ClCompile>
-    <ClCompile Include="ESKBinColor.cpp">
-      <Filter>ESK</Filter>
-    </ClCompile>
-    <ClCompile Include="EANBinColor.cpp">
-      <Filter>EAN</Filter>
     </ClCompile>
     <ClCompile Include="EMOBinColor.cpp">
       <Filter>EMO</Filter>
@@ -373,9 +187,6 @@
     </ClCompile>
     <ClCompile Include="UassetUexp.cpp">
       <Filter>UassetUexp</Filter>
-    </ClCompile>
-    <ClCompile Include="mdl_yo3.cpp">
-      <Filter>Mdl</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

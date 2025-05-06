@@ -1400,6 +1400,15 @@ TiXmlElement* Havok_TagItem::exportXml()
 	node_Item->SetAttribute("isPtr", isPtr ? "true" : "false");
 	node_Item->SetAttribute("offset", EMO_BaseFile::UnsignedToString(offset, true));
 	node_Item->SetAttribute("count", count);
+
+	//Add value if string
+	if (type->id == 13) {
+		std::string s = "";
+		for (Havok_TagObject* ch : value)
+			s += static_cast<char>(ch->i_value);
+		node_Item->SetAttribute("value", s);
+	}
+
 	return node_Item;
 }
 
@@ -1552,12 +1561,37 @@ bool Havok::import_Xml(TiXmlElement* rootNode)
 		{
 			if (listNoOrderer.at(i)->type->id == typeId && listNoOrderer.at(i)->value.size() == xml_count)
 			{
-				listItem.push_back(listNoOrderer.at(i));
-				listIsCopyed.at(i) = true;
-				//listStart_forEachId.at(typeId) = i + 1;						//to get another (same if same id)
+				if (typeId == 13) {		//Strings are additionally checked for character matches.
 
-				listItem.back()->importXml(node);
-				break;
+					const char* xml_value_cstr = node->Attribute("value");
+					if (xml_value_cstr)
+					{
+						std::string xml_value = xml_value_cstr;
+						std::string item_str = "";
+						for (Havok_TagObject* ch : listNoOrderer.at(i)->value)
+							item_str += static_cast<char>(ch->i_value);
+
+						if (!item_str.empty() && item_str.back() == '\0')
+							item_str.pop_back();
+
+						if (item_str == xml_value)
+						{
+							listItem.push_back(listNoOrderer.at(i));
+							listIsCopyed.at(i) = true;
+
+							listItem.back()->importXml(node);
+							break;
+						}
+					}
+				}
+				else {
+					listItem.push_back(listNoOrderer.at(i));
+					listIsCopyed.at(i) = true;
+
+					listItem.back()->importXml(node);
+					break;
+				}
+
 			}
 		}
 	}
@@ -1754,14 +1788,24 @@ bool Havok_TagObject::importXml(TiXmlElement* node, std::vector<Havok_TagType*> 
 		item->type = listType.at(13);
 		item->isPtr = false;
 
+		std::string reconstructed_str;
+
 		for (TiXmlElement* subNode = node->FirstChildElement("Object"); subNode; subNode = subNode->NextSiblingElement("Object"))
 		{
 			Havok_TagObject* charObj = new Havok_TagObject();
 			charObj->importXml(subNode, listType, listItems, 0, 0, level + 1);
 			item->value.push_back(charObj);
+			reconstructed_str += (char)charObj->i_value;
 		}
 
 		listItems.push_back(item);
+
+		Havok_TagObject* strObj = new Havok_TagObject();
+		strObj->type = listType.at(13);
+		strObj->s_value = reconstructed_str;
+		strObj->attachement = item;
+
+		listObjectString.push_back(strObj);
 
 		return true;
 	}
@@ -2465,7 +2509,6 @@ Havok_TagObject* Havok::readObject(size_t index, const uint8_t *buf, size_t size
 			break;
 		}
 	}
-
 
 	string type_str = "";
 	if (type->subType() == TST_Bool)

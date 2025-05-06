@@ -7,7 +7,7 @@
 #include <locale>
 #include <string>
 #include <algorithm>
-#include <cvt/wstring>
+//#include <cvt/wstring>
 #include "windows.h"
 
 // TinyXML
@@ -21,7 +21,7 @@
 
 #ifdef LIBXENOVERSE_ZLIB_SUPPORT
 // ZLIB Includes
-#include "zlib.h"
+//#include "zlib.h"
 #endif
 
 #ifdef LIBXENOVERSE_WINSDK_SUPPORT

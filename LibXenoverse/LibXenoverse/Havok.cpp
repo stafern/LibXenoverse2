@@ -1323,7 +1323,11 @@ namespace LibXenoverse
 		}
 		else if (supertype->subType() == Havok::TST_String) {
 			node->SetAttribute("type", "string");
-			node->SetAttribute("value", s_value);
+
+			string value = s_value;
+			if ((!value.empty()) && (value.back() == '\0'))
+				value.pop_back();
+			node->SetAttribute("value", value);
 
 			size_t nbObj = listObjectString.size();
 			for (size_t i = 0; i < nbObj; i++)
@@ -1381,6 +1385,20 @@ namespace LibXenoverse
 		node_Item->SetAttribute("isPtr", isPtr ? "true" : "false");
 		node_Item->SetAttribute("offset", EMO_BaseFile::UnsignedToString(offset, true));
 		node_Item->SetAttribute("count", count);
+
+		// Character items back string pointers. Keep their value so that XML
+		// import can distinguish multiple strings which use the same item type.
+		if ((type) && (type->name == "char"))
+		{
+			string value;
+			for (Havok_TagObject* obj : this->value)
+				value += static_cast<char>(obj->i_value);
+			if ((!value.empty()) && (value.back() == '\0'))
+				value.pop_back();
+
+			node_Item->SetAttribute("value", value);
+		}
+
 		return node_Item;
 	}
 
@@ -1496,7 +1514,7 @@ namespace LibXenoverse
 			if (!rootObject)
 				rootObject = obj;
 		}
-		std::sort(listItem.begin(), listItem.end(), &Havok_TagItem::levelOrder);
+		std::stable_sort(listItem.begin(), listItem.end(), &Havok_TagItem::levelOrder);
 
 
 
@@ -1512,30 +1530,42 @@ namespace LibXenoverse
 		listItem.clear();
 		std::vector<bool> listIsCopyed;
 		listIsCopyed.resize(nbItems, false);
-		std::vector<size_t> listStart_forEachId;			//to avoid to have 2 same items
-		listStart_forEachId.resize(nbTypes, 0);
 		size_t typeId = 0;
-		string str;
 
 
 		for (TiXmlElement* node = node_Item->FirstChildElement("Item"); node; node = node->NextSiblingElement("Item"))
 		{
 			node->QueryUnsignedAttribute("type", &typeId);
+			unsigned int xmlCount = 0;
+			node->QueryUnsignedAttribute("count", &xmlCount);
 
 			if (typeId >= nbTypes)
 				continue;
 
-			for (size_t i = listStart_forEachId.at(typeId); i < nbItems; i++)
+			for (size_t i = 0; i < nbItems; i++)
 			{
-				if (listNoOrderer.at(i)->type->id == typeId)
-				{
-					listItem.push_back(listNoOrderer.at(i));
-					listIsCopyed.at(i) = true;
-					listStart_forEachId.at(typeId) = i + 1;						//to get another (same if same id)
+				Havok_TagItem* item = listNoOrderer.at(i);
+				if ((listIsCopyed.at(i)) || (item->type->id != typeId) || (item->value.size() != xmlCount))
+					continue;
 
-					listItem.back()->importXml(node);
-					break;
+				const char* xmlValuePtr = node->Attribute("value");
+				if (xmlValuePtr)
+				{
+					string itemValue;
+					for (Havok_TagObject* obj : item->value)
+						itemValue += static_cast<char>(obj->i_value);
+
+					if ((!itemValue.empty()) && (itemValue.back() == '\0'))
+						itemValue.pop_back();
+
+					if (itemValue != string(xmlValuePtr))
+						continue;
 				}
+
+				listItem.push_back(item);
+				listIsCopyed.at(i) = true;
+				listItem.back()->importXml(node);
+				break;
 			}
 		}
 
@@ -1746,12 +1776,25 @@ namespace LibXenoverse
 		else if (supertype->subType() == Havok::TST_String) {
 			node->QueryStringAttribute("value", &s_value);
 
+			Havok_TagItem* stringItem = 0;
 			for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
 			{
 				Havok_TagObject* obj = new Havok_TagObject();
-				isPtr = obj->importXml(node_tmp, listType, listItems, 0, 0, level + 1) || isPtr;
-				isParentPtr = true;
+				obj->importXml(node_tmp, listType, listItems, 0, 0, level + 1);
+
+				if (!stringItem)
+					stringItem = new Havok_TagItem(level + 1, obj->type);
+
+				obj->attachement = stringItem;
+				stringItem->value.push_back(obj);
 				listObjectString.push_back(obj);
+			}
+
+			if (stringItem)
+			{
+				stringItem->count = stringItem->value.size();
+				listItems.push_back(stringItem);
+				isParentPtr = true;
 			}
 
 		}
@@ -2452,8 +2495,17 @@ namespace LibXenoverse
 
 			printf("-> Float at %s\n", UnsignedToString(offset - 0x20, true).c_str());
 
-			float* values = (float*)(buf + offset);
-			obj->f_value = values[0];
+			if (type->byteSize == sizeof(uint16_t))
+			{
+				uint16_t halfValue;
+				memcpy(&halfValue, buf + offset, sizeof(halfValue));
+				uint32_t floatValue = static_cast<uint32_t>(halfValue) << 16;
+				memcpy(&obj->f_value, &floatValue, sizeof(obj->f_value));
+			}
+			else
+			{
+				memcpy(&obj->f_value, buf + offset, sizeof(obj->f_value));
+			}
 
 		}
 		else if (type->subType() == TST_String) {
@@ -2561,7 +2613,14 @@ namespace LibXenoverse
 		else if (type->subType() == TST_Float) {
 
 			printf("-> Float at %s\n", UnsignedToString(listBytesData.size(), true).c_str());
-			writeFormat(*((uint32_t*)(&obj->f_value)), listBytesData, TST_Int32);
+
+			uint32_t floatValue;
+			memcpy(&floatValue, &obj->f_value, sizeof(floatValue));
+
+			if (type->byteSize == sizeof(uint16_t))
+				writeFormat(floatValue >> 16, listBytesData, TST_Int16);
+			else
+				writeFormat(floatValue, listBytesData, TST_Int32);
 
 		}
 		else if (type->subType() == TST_String) {

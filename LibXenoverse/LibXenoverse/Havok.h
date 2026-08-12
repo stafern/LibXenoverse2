@@ -239,7 +239,7 @@ public:
 	void Reset();
 	Havok_TagObject* clone();
 
-	TiXmlElement* exportXml(string name = "");
+	TiXmlElement* exportXml(string name = "", const std::vector<Havok_TagItem*>* listItems = 0);
 	bool importXml(TiXmlElement* node, std::vector<Havok_TagType*>& listType, std::vector<Havok_TagItem*>& listItems, Havok_TagItem* parentAttachement = 0, size_t addToItemList = 0, size_t level = 0);
 
 #ifdef LIBXENOVERSE_FBX_SUPPORT

@@ -4,9 +4,10 @@
 #include <iomanip>
 
 #include <algorithm> 
-#include <functional> 
+#include <functional>
 #include <cctype>
 #include <locale>
+#include <set>
 #include "EMO_common.h"
 
 namespace LibXenoverse
@@ -15,7 +16,7 @@ namespace LibXenoverse
 	/*-------------------------------------------------------------------------------\
 	|                             Havok					                             |
 	\-------------------------------------------------------------------------------*/
-	Havok::Havok()
+	Havok::Havok() : rootObject(0)
 	{
 		Reset();
 	}
@@ -26,19 +27,60 @@ namespace LibXenoverse
 	{
 		version = "2015.01.00";
 
-		size_t nbElement = listType.size();
-		for (size_t i = 0; i < nbElement; i++)
-			delete listType.at(i);
-		listType.clear();
+		// Objects reached through pointer and array members may be shared by
+		// several parents. Collect the graph first, detach every edge, and then
+		// delete each object exactly once.
+		std::vector<Havok_TagObject*> pendingObjects;
+		std::vector<Havok_TagObject*> objects;
+		std::set<Havok_TagObject*> knownObjects;
 
-		nbElement = listItem.size();
+		if (rootObject)
+			pendingObjects.push_back(rootObject);
+
+		for (Havok_TagItem* item : listItem)
+			for (Havok_TagObject* obj : item->value)
+				pendingObjects.push_back(obj);
+
+		while (!pendingObjects.empty())
+		{
+			Havok_TagObject* obj = pendingObjects.back();
+			pendingObjects.pop_back();
+
+			if ((!obj) || (!knownObjects.insert(obj).second))
+				continue;
+
+			objects.push_back(obj);
+			if (obj->objectPointer)
+				pendingObjects.push_back(obj->objectPointer);
+			pendingObjects.insert(pendingObjects.end(), obj->listObjectString.begin(), obj->listObjectString.end());
+			pendingObjects.insert(pendingObjects.end(), obj->listObjectClass.begin(), obj->listObjectClass.end());
+			pendingObjects.insert(pendingObjects.end(), obj->listObjectArray.begin(), obj->listObjectArray.end());
+			pendingObjects.insert(pendingObjects.end(), obj->listObjectTuple.begin(), obj->listObjectTuple.end());
+		}
+
+		for (Havok_TagObject* obj : objects)
+		{
+			obj->objectPointer = 0;
+			obj->listObjectString.clear();
+			obj->listObjectClass.clear();
+			obj->listObjectArray.clear();
+			obj->listObjectTuple.clear();
+			obj->attachement = 0;
+		}
+
+		for (Havok_TagObject* obj : objects)
+			delete obj;
+		rootObject = 0;
+
+		size_t nbElement = listItem.size();
 		for (size_t i = 0; i < nbElement; i++)
 			delete listItem.at(i);
 		listItem.clear();
 
-		if (rootObject)
-			delete rootObject;
-		rootObject = 0;
+		nbElement = listType.size();
+		for (size_t i = 0; i < nbElement; i++)
+			delete listType.at(i);
+		listType.clear();
 	}
 	/*-------------------------------------------------------------------------------\
 	|                             Reset					                             |
@@ -1171,7 +1213,18 @@ namespace LibXenoverse
 		parent->LinkEndChild(node_data);
 
 		if (rootObject)
-			node_data->LinkEndChild(rootObject->exportXml());
+		{
+			TiXmlElement* rootNode = rootObject->exportXml("", &listItem);
+			for (size_t i = 0; i < listItem.size(); i++)
+			{
+				if (listItem.at(i) == rootObject->attachement)
+				{
+					rootNode->SetAttribute("ItemIndex", static_cast<unsigned int>(i));
+					break;
+				}
+			}
+			node_data->LinkEndChild(rootNode);
+		}
 
 
 		TiXmlElement* node_Type = new TiXmlElement("ListType");
@@ -1294,7 +1347,7 @@ namespace LibXenoverse
 	/*-------------------------------------------------------------------------------\
 	|                             exportXml						                     |
 	\-------------------------------------------------------------------------------*/
-	TiXmlElement* Havok_TagObject::exportXml(string name)
+	TiXmlElement* Havok_TagObject::exportXml(string name, const std::vector<Havok_TagItem*>* listItems)
 	{
 		TiXmlElement* node = new TiXmlElement("Object");
 		if (name.length())
@@ -1304,6 +1357,21 @@ namespace LibXenoverse
 
 		Havok_TagType* supertype = type->superType();
 		//node->SetAttribute("supTNam", std::to_string(supertype->id) + "_" + supertype->name);
+
+		auto setItemIndex = [node, listItems](Havok_TagItem* item)
+		{
+			if ((!item) || (!listItems))
+				return;
+
+			for (size_t i = 0; i < listItems->size(); i++)
+			{
+				if (listItems->at(i) == item)
+				{
+					node->SetAttribute("ItemIndex", static_cast<unsigned int>(i));
+					return;
+				}
+			}
+		};
 
 		if (supertype->subType() == Havok::TST_Bool)
 		{
@@ -1328,17 +1396,22 @@ namespace LibXenoverse
 			if ((!value.empty()) && (value.back() == '\0'))
 				value.pop_back();
 			node->SetAttribute("value", value);
+			if (!listObjectString.empty())
+				setItemIndex(listObjectString.front()->attachement);
 
 			size_t nbObj = listObjectString.size();
 			for (size_t i = 0; i < nbObj; i++)
-				node->LinkEndChild(listObjectString.at(i)->exportXml());
+				node->LinkEndChild(listObjectString.at(i)->exportXml("", listItems));
 
 
 		}
 		else if (supertype->subType() == Havok::TST_Pointer) {
 			node->SetAttribute("type", "pointer");
 			if (objectPointer)
-				node->LinkEndChild(objectPointer->exportXml());
+			{
+				setItemIndex(objectPointer->attachement);
+				node->LinkEndChild(objectPointer->exportXml("", listItems));
+			}
 
 		}
 		else if (supertype->subType() == Havok::TST_Class) {
@@ -1350,15 +1423,17 @@ namespace LibXenoverse
 			node->SetAttribute("type", "Class");
 			size_t nbObj = listObjectClass.size();
 			for (size_t i = 0; i < nbObj; i++)
-				node->LinkEndChild(listObjectClass.at(i)->exportXml((i <= nbMember) ? listMembers.at(i)->name : ""));
+				node->LinkEndChild(listObjectClass.at(i)->exportXml((i < nbMember) ? listMembers.at(i)->name : "", listItems));
 
 		}
 		else if (supertype->subType() == Havok::TST_Array) {
 
 			node->SetAttribute("type", "Array");
+			if (!listObjectArray.empty())
+				setItemIndex(listObjectArray.front()->attachement);
 			size_t nbObj = listObjectArray.size();
 			for (size_t i = 0; i < nbObj; i++)
-				node->LinkEndChild(listObjectArray.at(i)->exportXml());
+				node->LinkEndChild(listObjectArray.at(i)->exportXml("", listItems));
 
 		}
 		else if (supertype->subType() == Havok::TST_Tuple) {
@@ -1366,7 +1441,7 @@ namespace LibXenoverse
 			node->SetAttribute("type", "Tuple");
 			size_t nbObj = listObjectTuple.size();
 			for (size_t i = 0; i < nbObj; i++)
-				node->LinkEndChild(listObjectTuple.at(i)->exportXml());
+				node->LinkEndChild(listObjectTuple.at(i)->exportXml("", listItems));
 		}
 		else {
 			printf("unknow superType->subType() : %s\n", EMO_BaseFile::UnsignedToString(supertype->subType(), true).c_str());
@@ -1498,6 +1573,66 @@ namespace LibXenoverse
 		size_t inc = 0;
 		for (TiXmlElement* node = node_Types->FirstChildElement("Type"); node; node = node->NextSiblingElement("Type"))
 			listType.at(inc++)->importXml_secondkeyframe(node, listType);
+
+		// Newer XML files identify the ITEM behind every pointer, array and
+		// string. Build the ITEM table first so repeated references can share
+		// the same objects instead of being expanded into duplicate items.
+		TiXmlElement* firstDataObject = node_Data->FirstChildElement("Object");
+		bool hasItemReferences = ((firstDataObject) && (firstDataObject->Attribute("ItemIndex")));
+		if (hasItemReferences)
+		{
+			for (TiXmlElement* node = node_Item->FirstChildElement("Item"); node; node = node->NextSiblingElement("Item"))
+			{
+				size_t typeId = 0;
+				node->QueryUnsignedAttribute("type", &typeId);
+
+				Havok_TagType* itemType = 0;
+				for (Havok_TagType* type : listType)
+				{
+					if (type->id == typeId)
+					{
+						itemType = type;
+						break;
+					}
+				}
+
+				if (!itemType)
+				{
+					printf("Cannot find ITEM type %i in xml.\n", static_cast<unsigned int>(typeId));
+					notifyError();
+					return false;
+				}
+
+				Havok_TagItem* item = new Havok_TagItem(0, itemType);
+				item->importXml(node);
+				listItem.push_back(item);
+			}
+
+			for (TiXmlElement* node = firstDataObject; node; node = node->NextSiblingElement("Object"))
+			{
+				size_t itemIndex = 0;
+				node->QueryUnsignedAttribute("ItemIndex", &itemIndex);
+				if ((itemIndex == 0) || (itemIndex >= listItem.size()))
+				{
+					printf("Invalid root ItemIndex %i in xml.\n", static_cast<unsigned int>(itemIndex));
+					notifyError();
+					return false;
+				}
+
+				Havok_TagObject* obj = new Havok_TagObject();
+				obj->importXml(node, listType, listItem, 0, itemIndex, 0);
+				if (!rootObject)
+					rootObject = obj;
+			}
+
+			// Parsing the object graph can infer pointer flags. The serialized
+			// ITEM metadata is authoritative, so restore it after graph import.
+			size_t itemIndex = 0;
+			for (TiXmlElement* node = node_Item->FirstChildElement("Item"); node; node = node->NextSiblingElement("Item"))
+				listItem.at(itemIndex++)->importXml(node);
+
+			return (rootObject != 0);
+		}
 
 
 
@@ -1746,13 +1881,25 @@ namespace LibXenoverse
 			}
 
 			listItems.at(addToItemList)->value.push_back(this);
-			listItems.at(addToItemList)->count++;
+			listItems.at(addToItemList)->count = listItems.at(addToItemList)->value.size();
 			attachement = listItems.at(addToItemList);
 		}
 
 
 		bool isPtr = false;
 		bool isParentPtr = false;
+		size_t referencedItemIndex = 0;
+		bool hasItemReference = false;
+		if (node->Attribute("ItemIndex"))
+		{
+			node->QueryUnsignedAttribute("ItemIndex", &referencedItemIndex);
+			hasItemReference = ((referencedItemIndex != 0) && (referencedItemIndex < listItems.size()));
+			if (!hasItemReference)
+			{
+				printf("Invalid ItemIndex %i in xml.\n", static_cast<unsigned int>(referencedItemIndex));
+				notifyError();
+			}
+		}
 
 
 		if (supertype->subType() == Havok::TST_Bool)
@@ -1776,37 +1923,75 @@ namespace LibXenoverse
 		else if (supertype->subType() == Havok::TST_String) {
 			node->QueryStringAttribute("value", &s_value);
 
-			Havok_TagItem* stringItem = 0;
-			for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+			if (hasItemReference)
 			{
-				Havok_TagObject* obj = new Havok_TagObject();
-				obj->importXml(node_tmp, listType, listItems, 0, 0, level + 1);
+				Havok_TagItem* stringItem = listItems.at(referencedItemIndex);
+				if (stringItem->value.empty())
+				{
+					for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+					{
+						Havok_TagObject* obj = new Havok_TagObject();
+						obj->importXml(node_tmp, listType, listItems, 0, referencedItemIndex, level + 1);
+					}
+				}
 
-				if (!stringItem)
-					stringItem = new Havok_TagItem(level + 1, obj->type);
-
-				obj->attachement = stringItem;
-				stringItem->value.push_back(obj);
-				listObjectString.push_back(obj);
-			}
-
-			if (stringItem)
-			{
-				stringItem->count = stringItem->value.size();
-				listItems.push_back(stringItem);
+				listObjectString = stringItem->value;
 				isParentPtr = true;
+			}
+			else
+			{
+				Havok_TagItem* stringItem = 0;
+				for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+				{
+					Havok_TagObject* obj = new Havok_TagObject();
+					obj->importXml(node_tmp, listType, listItems, 0, 0, level + 1);
+
+					if (!stringItem)
+						stringItem = new Havok_TagItem(level + 1, obj->type);
+
+					obj->attachement = stringItem;
+					stringItem->value.push_back(obj);
+					listObjectString.push_back(obj);
+				}
+
+				if (stringItem)
+				{
+					stringItem->count = stringItem->value.size();
+					listItems.push_back(stringItem);
+					isParentPtr = true;
+				}
 			}
 
 		}
 		else if (supertype->subType() == Havok::TST_Pointer) {
 
-			size_t itemIndex = listItems.size();
-			for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+			if (hasItemReference)
 			{
-				objectPointer = new Havok_TagObject();
-				isPtr = objectPointer->importXml(node_tmp, listType, listItems, 0, itemIndex, level + 1) || isPtr;
+				Havok_TagItem* pointerItem = listItems.at(referencedItemIndex);
+				if (pointerItem->value.empty())
+				{
+					TiXmlElement* node_tmp = node->FirstChildElement("Object");
+					if (node_tmp)
+					{
+						Havok_TagObject* obj = new Havok_TagObject();
+						obj->importXml(node_tmp, listType, listItems, 0, referencedItemIndex, level + 1);
+					}
+				}
+
+				if (!pointerItem->value.empty())
+					objectPointer = pointerItem->value.front();
 				isParentPtr = true;
-				break;
+			}
+			else
+			{
+				size_t itemIndex = listItems.size();
+				for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+				{
+					objectPointer = new Havok_TagObject();
+					isPtr = objectPointer->importXml(node_tmp, listType, listItems, 0, itemIndex, level + 1) || isPtr;
+					isParentPtr = true;
+					break;
+				}
 			}
 
 		}
@@ -1823,13 +2008,31 @@ namespace LibXenoverse
 		}
 		else if (supertype->subType() == Havok::TST_Array) {
 
-			size_t itemIndex = listItems.size();
-			for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+			if (hasItemReference)
 			{
-				Havok_TagObject* obj = new Havok_TagObject();
-				isPtr = obj->importXml(node_tmp, listType, listItems, 0, itemIndex, level + 1) || isPtr;
+				Havok_TagItem* arrayItem = listItems.at(referencedItemIndex);
+				if (arrayItem->value.empty())
+				{
+					for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+					{
+						Havok_TagObject* obj = new Havok_TagObject();
+						obj->importXml(node_tmp, listType, listItems, 0, referencedItemIndex, level + 1);
+					}
+				}
+
+				listObjectArray = arrayItem->value;
 				isParentPtr = true;
-				listObjectArray.push_back(obj);
+			}
+			else
+			{
+				size_t itemIndex = listItems.size();
+				for (TiXmlElement* node_tmp = node->FirstChildElement("Object"); node_tmp; node_tmp = node_tmp->NextSiblingElement("Object"))
+				{
+					Havok_TagObject* obj = new Havok_TagObject();
+					isPtr = obj->importXml(node_tmp, listType, listItems, 0, itemIndex, level + 1) || isPtr;
+					isParentPtr = true;
+					listObjectArray.push_back(obj);
+				}
 			}
 
 		}
@@ -1863,6 +2066,10 @@ namespace LibXenoverse
 		string str = "";
 		node->QueryStringAttribute("offset", &str);
 		offset = EMO_BaseFile::GetUnsigned(str, 0) & 0xFFFFFFFF;
+
+		unsigned int importedCount = 0;
+		if (node->QueryUnsignedAttribute("count", &importedCount) == TIXML_SUCCESS)
+			count = importedCount;
 
 		node->QueryStringAttribute("isPtr", &str);
 		isPtr = str == "true";
@@ -2465,17 +2672,6 @@ namespace LibXenoverse
 		obj->attachement = parentAttachement;
 
 
-		size_t nbItem = listItem.size();
-		for (size_t i = 0; i < nbItem; i++)
-		{
-			if (listItem.at(i)->type->id == typeOrigin->id)
-			{
-				obj->attachement = listItem.at(i);
-				break;
-			}
-		}
-
-
 		string type_str = "";
 		if (type->subType() == TST_Bool)
 		{
@@ -2532,10 +2728,10 @@ namespace LibXenoverse
 			{
 				obj->objectPointer = listObj.at(0);
 			}
-			else {
-				size_t nbObj = listObj.size();
-				for (size_t i = 0; i < nbObj; i++)
-					delete listObj.at(i);
+			else if (listObj.size() > 1)
+			{
+				printf("warning: pointer references an ITEM containing %i objects; the first object is used.\n", static_cast<unsigned int>(listObj.size()));
+				obj->objectPointer = listObj.front();
 			}
 
 		}

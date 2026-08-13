@@ -165,14 +165,17 @@ public:
 
 	size_t byteSize;
 	size_t alignment;
+	size_t alignmentFlags;
 	size_t abstractValue;
+	bool hasBody;
+	size_t memberCountFlags;
 
 	std::vector<Havok_TagTemplate*> listTemplate;
 	std::vector<Havok_TagMember*> members;
 	std::vector<Havok_TagInterface> interfaces;
 
 
-	Havok_TagType(size_t id, string name = "", Havok_TagType* parent = 0, size_t flags = 0, size_t subTypeFlags = 0, Havok_TagType* pointer = 0, size_t version = 0, size_t byteSize = 0, size_t alignment = 0, size_t abstractValue = 0) { this->id = id;  this->name = name; this->parent = parent, this->flags = flags; this->subTypeFlags = subTypeFlags; this->pointer = pointer; this->version = version; this->byteSize = byteSize; this->alignment = alignment; this->abstractValue = abstractValue; }
+	Havok_TagType(size_t id, string name = "", Havok_TagType* parent = 0, size_t flags = 0, size_t subTypeFlags = 0, Havok_TagType* pointer = 0, size_t version = 0, size_t byteSize = 0, size_t alignment = 0, size_t abstractValue = 0) { this->id = id; this->name = name; this->parent = parent; this->flags = flags; this->subTypeFlags = subTypeFlags; this->pointer = pointer; this->version = version; this->byteSize = byteSize; this->alignment = alignment; this->alignmentFlags = 0; this->abstractValue = abstractValue; this->hasBody = true; this->memberCountFlags = 0; }
 	~Havok_TagType() { Reset(); }
 	void Reset(void);
 	
@@ -296,7 +299,7 @@ public:
 
 
 private:
-	string version;							//only "2015.01.00" accepted
+	string version;							//Supported versions: "2015.01.00" and "2020.01.00"
 
 	Havok_TagObject* rootObject;
 	std::vector<Havok_TagType*> listType;
@@ -319,8 +322,8 @@ public:
 	Havok_TagObject* readObject(size_t index, const uint8_t *buf, size_t size, Havok_TagType* type, size_t &offset, std::vector<Havok_TagItem*> &listItem, std::vector<Havok_TagType*> &listType, Havok_TagItem* parentAttachement = 0);
 	void writeObject(Havok_TagObject* obj, std::vector<byte> &listBytesData, std::vector<Havok_TagItem*> &listItem, std::vector<Havok_TagType*> &listType);
 	std::vector<Havok_TagObject*> readItemPtr(const uint8_t *buf, size_t size, size_t &offset, std::vector<Havok_TagItem*> &listItem, std::vector<Havok_TagType*> &listType, bool indexInversed = false);
-	uint32_t readPacked(const uint8_t *buf, size_t size, size_t &nbBytes);				//apparently the 3 first left bits is for definied the size (in bytes) of the value:
-	void writePacked(std::vector<byte> &listBytesTNam, uint32_t value);					//apparently the 3 first left bits is for definied the size (in bytes) of the value:
+	uint32_t readPacked(const uint8_t *buf, size_t size, size_t &nbBytes, bool extended = false);	//apparently the 3 first left bits is for definied the size (in bytes) of the value:
+	void writePacked(std::vector<byte> &listBytesTNam, uint32_t value, bool extended = false);		//apparently the 3 first left bits is for definied the size (in bytes) of the value:
 	long long readFormat(const uint8_t *buf, size_t size, uint32_t flags, string &type_str, bool bigEndian = false, bool isSigned = false);
 	void writeFormat(long long value, std::vector<byte> &listBytesData, uint32_t flags, bool isSigned = false);
 

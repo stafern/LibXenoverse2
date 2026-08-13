@@ -248,12 +248,23 @@ namespace LibXenoverse
 
 
 		Havok_Version* version_info = (Havok_Version*)GetOffsetPtr(buf, offset, true);
-		if ((memcmp(version_info->year, Havok_v2015_SIGNATURE, 4) != 0) || (memcmp(version_info->major, Havok_major01_SIGNATURE, 2) != 0) || (memcmp(version_info->minor, Havok_minor00_SIGNATURE, 2) != 0))
+		bool isVersion2015 = ((memcmp(version_info->year, Havok_v2015_SIGNATURE, 4) == 0) &&
+			(memcmp(version_info->major, Havok_major01_SIGNATURE, 2) == 0) &&
+			(memcmp(version_info->minor, Havok_minor00_SIGNATURE, 2) == 0));
+		bool isVersion2020 = ((memcmp(version_info->year, Havok_v2020_SIGNATURE, 4) == 0) &&
+			(memcmp(version_info->major, Havok_major01_SIGNATURE, 2) == 0) &&
+			(memcmp(version_info->minor, Havok_minor00_SIGNATURE, 2) == 0));
+		if ((!isVersion2015) && (!isVersion2020))
 		{
-			printf("error: havok's version request : %s.%s.%s\n", Havok_v2015_SIGNATURE, Havok_major01_SIGNATURE, Havok_minor00_SIGNATURE);
+			printf("error: unsupported havok version: %.4s.%.2s.%.2s\n", version_info->year, version_info->major, version_info->minor);
 			notifyError();
 			return false;
 		}
+		version.assign(version_info->year, 4);
+		version += ".";
+		version.append(version_info->major, 2);
+		version += ".";
+		version.append(version_info->minor, 2);
 		offset += sizeof(Havok_Version);
 
 
@@ -263,6 +274,40 @@ namespace LibXenoverse
 		size_t sizeOfData = 0;
 		std::vector<string> listTSTR;
 		std::vector<string> listFSTR;
+
+		auto readStringTable = [buf](std::vector<string>& strings, size_t tableOffset, size_t tableSize, bool hasFfPadding)
+		{
+			size_t tablePosition = 0;
+			while (tablePosition < tableSize)
+			{
+				const uint8_t* stringStart = buf + tableOffset + tablePosition;
+				if ((hasFfPadding) && (*stringStart == 0xFF))
+				{
+					bool isPadding = true;
+					for (size_t i = tablePosition; i < tableSize; i++)
+					{
+						if (buf[tableOffset + i] != 0xFF)
+						{
+							isPadding = false;
+							break;
+						}
+					}
+
+					if (isPadding)
+						break;
+				}
+
+				const void* terminator = memchr(stringStart, 0, tableSize - tablePosition);
+				if (!terminator)
+					return false;
+
+				size_t stringLength = static_cast<const uint8_t*>(terminator) - stringStart;
+				strings.push_back(string(reinterpret_cast<const char*>(stringStart), stringLength));
+				tablePosition += stringLength + 1;
+			}
+
+			return true;
+		};
 
 
 		while (offset < hdr_size)
@@ -293,50 +338,55 @@ namespace LibXenoverse
 
 
 
-					if (memcmp(type_subpart_hdr->signature, Havok_TSTR_SIGNATURE, 4) == 0)
+					if ((memcmp(type_subpart_hdr->signature, Havok_TSTR_SIGNATURE, 4) == 0) ||
+						(memcmp(type_subpart_hdr->signature, Havok_TST1_SIGNATURE, 4) == 0))
 					{
-						size_t offset_tmp = 0;
-						size_t inc = 0;
-						while (offset_tmp < type_subpart_hdr_size - sizeof(Havok_PartHeader))
+						size_t stringTableSize = type_subpart_hdr_size - sizeof(Havok_PartHeader);
+						bool hasFfPadding = (memcmp(type_subpart_hdr->signature, Havok_TST1_SIGNATURE, 4) == 0);
+						if (!readStringTable(listTSTR, offset, stringTableSize, hasFfPadding))
 						{
-							char* char_ptr = (char*)GetOffsetPtr(buf, offset + offset_tmp, true);
-							string str = string(char_ptr);
-							listTSTR.push_back(string(str));
-							offset_tmp += str.length() + 1;
+							printf("error: unterminated string in %.4s.\n", type_subpart_hdr->signature);
+							notifyError();
+							return false;
 						}
 						offset += type_subpart_hdr_size - sizeof(Havok_PartHeader);
 
 
 
 					}
-					else if (memcmp(type_subpart_hdr->signature, Havok_TNAM_SIGNATURE, 4) == 0) {
+					else if ((memcmp(type_subpart_hdr->signature, Havok_TNAM_SIGNATURE, 4) == 0) ||
+						(memcmp(type_subpart_hdr->signature, Havok_TNA1_SIGNATURE, 4) == 0)) {
 
 
+						bool hasExtendedPackedValues = (memcmp(type_subpart_hdr->signature, Havok_TNA1_SIGNATURE, 4) == 0);
+						size_t sectionEnd = offset + type_subpart_hdr_size - sizeof(Havok_PartHeader);
 						size_t nbBytes = 0;
-						size_t nbTypes = readPacked(buf + offset, size - offset, nbBytes);
+						size_t nbTypes = readPacked(buf + offset, sectionEnd - offset, nbBytes, hasExtendedPackedValues);
 
 						for (size_t i = 0; i < nbTypes; i++)
+						{
 							listType.push_back(new Havok_TagType(i, "None"));
+							listType.back()->hasBody = false;
+						}
 
 						size_t offset_tmp = offset + nbBytes;
 						for (size_t i = 1; i < nbTypes; i++)
 						{
 							Havok_TagType* tagType = listType.at(i);
-
-							tagType->name = listTSTR.at(readPacked(buf + offset_tmp, size - offset_tmp, nbBytes));
+							tagType->name = listTSTR.at(readPacked(buf + offset_tmp, (offset_tmp < sectionEnd) ? sectionEnd - offset_tmp : 0, nbBytes, hasExtendedPackedValues));
 							offset_tmp += nbBytes;
 
-							size_t nbNextValues = readPacked(buf + offset_tmp, size - offset_tmp, nbBytes);
+							size_t nbNextValues = readPacked(buf + offset_tmp, (offset_tmp < sectionEnd) ? sectionEnd - offset_tmp : 0, nbBytes, hasExtendedPackedValues);
 							offset_tmp += nbBytes;
 
 							for (size_t j = 0; j < nbNextValues; j++)
 							{
-								size_t index = readPacked(buf + offset_tmp, size - offset_tmp, nbBytes);
+								size_t index = readPacked(buf + offset_tmp, (offset_tmp < sectionEnd) ? sectionEnd - offset_tmp : 0, nbBytes, hasExtendedPackedValues);
 								offset_tmp += nbBytes;
 								string str = listTSTR.at(index);
 
 
-								Havok_TagTemplate* template_tmp = new Havok_TagTemplate(str, readPacked(buf + offset_tmp, size - offset_tmp, nbBytes));
+								Havok_TagTemplate* template_tmp = new Havok_TagTemplate(str, readPacked(buf + offset_tmp, (offset_tmp < sectionEnd) ? sectionEnd - offset_tmp : 0, nbBytes, hasExtendedPackedValues));
 								offset_tmp += nbBytes;
 
 								if (template_tmp->isType())
@@ -350,16 +400,16 @@ namespace LibXenoverse
 
 
 					}
-					else if (memcmp(type_subpart_hdr->signature, Havok_FSTR_SIGNATURE, 4) == 0) {
+					else if ((memcmp(type_subpart_hdr->signature, Havok_FSTR_SIGNATURE, 4) == 0) ||
+						(memcmp(type_subpart_hdr->signature, Havok_FST1_SIGNATURE, 4) == 0)) {
 
-						size_t offset_tmp = 0;
-						size_t inc = 0;
-						while (offset_tmp < type_subpart_hdr_size - sizeof(Havok_PartHeader))
+						size_t stringTableSize = type_subpart_hdr_size - sizeof(Havok_PartHeader);
+						bool hasFfPadding = (memcmp(type_subpart_hdr->signature, Havok_FST1_SIGNATURE, 4) == 0);
+						if (!readStringTable(listFSTR, offset, stringTableSize, hasFfPadding))
 						{
-							char* char_ptr = (char*)GetOffsetPtr(buf, offset + offset_tmp, true);
-							string str = string(char_ptr);
-							listFSTR.push_back(string(str));
-							offset_tmp += str.length() + 1;
+							printf("error: unterminated string in %.4s.\n", type_subpart_hdr->signature);
+							notifyError();
+							return false;
 						}
 
 						offset += type_subpart_hdr_size - sizeof(Havok_PartHeader);
@@ -367,25 +417,29 @@ namespace LibXenoverse
 
 
 					}
-					else if (memcmp(type_subpart_hdr->signature, Havok_TBOD_SIGNATURE, 4) == 0) {
+					else if ((memcmp(type_subpart_hdr->signature, Havok_TBOD_SIGNATURE, 4) == 0) ||
+						(memcmp(type_subpart_hdr->signature, Havok_TBDY_SIGNATURE, 4) == 0)) {
 
+						bool isTbdy = (memcmp(type_subpart_hdr->signature, Havok_TBDY_SIGNATURE, 4) == 0);
 						size_t offset_tmp = 0;
+						size_t bodySize = type_subpart_hdr_size - sizeof(Havok_PartHeader);
 						size_t nbBytes = 0;
-						while (offset_tmp < type_subpart_hdr_size - sizeof(Havok_PartHeader))
+						while (offset_tmp < bodySize)
 						{
-							size_t typeIndex = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+							size_t typeIndex = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 							offset_tmp += nbBytes;
 
 							if (typeIndex == 0)						//sequence of 0 padding
 								continue;
 
 							Havok_TagType* tagType = listType.at(typeIndex);
+							tagType->hasBody = true;
 
-							size_t typeIndexParent = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+							size_t typeIndexParent = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 							offset_tmp += nbBytes;
 							tagType->parent = listType.at(typeIndexParent);
 
-							size_t flags = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+							size_t flags = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 							offset_tmp += nbBytes;
 							tagType->flags = flags;
 
@@ -394,7 +448,7 @@ namespace LibXenoverse
 
 							if (tagType->flags & TagFlag::TF_SubType)
 							{
-								size_t value = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								size_t value = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
 
 								tagType->subTypeFlags = value;
@@ -402,7 +456,7 @@ namespace LibXenoverse
 
 							if ((tagType->flags & TagFlag::TF_Pointer) && ((tagType->subTypeFlags & 0xF) >= 6))
 							{
-								size_t value = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								size_t value = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
 
 								tagType->pointer = listType.at(value);
@@ -410,7 +464,7 @@ namespace LibXenoverse
 
 							if (tagType->flags & TagFlag::TF_Version)
 							{
-								size_t value = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								size_t value = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
 
 								tagType->version = value;
@@ -418,20 +472,22 @@ namespace LibXenoverse
 
 							if (tagType->flags & TagFlag::TF_ByteSize)
 							{
-								size_t value = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								size_t value = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
 
 								tagType->byteSize = value;
 
-								value = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								value = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
 
+								tagType->alignmentFlags = value & 0xFFFFF000;
+								value &= 0xFFF;
 								tagType->alignment = value;
 							}
 
 							if (tagType->flags & TagFlag::TF_AbstractValue)
 							{
-								size_t value = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								size_t value = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
 
 								tagType->abstractValue = value;
@@ -439,21 +495,27 @@ namespace LibXenoverse
 
 							if (tagType->flags & TagFlag::TF_Members)
 							{
-								size_t nbMembers = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								size_t encodedMemberCount = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
+								size_t nbMembers = encodedMemberCount;
+								if (isTbdy)
+								{
+									tagType->memberCountFlags = encodedMemberCount & 0xFFFF0000;
+									nbMembers &= 0xFFFF;
+								}
 
 								for (size_t i = 0; i < nbMembers; i++)
 								{
-									Havok_TagMember* tagMember = new Havok_TagMember(listFSTR.at(readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes)));
+									Havok_TagMember* tagMember = new Havok_TagMember(listFSTR.at(readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes)));
 									offset_tmp += nbBytes;
 
-									tagMember->flags = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+									tagMember->flags = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 									offset_tmp += nbBytes;
 
-									tagMember->byteOffset = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+									tagMember->byteOffset = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 									offset_tmp += nbBytes;
 
-									tagMember->type = listType.at(readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes));
+									tagMember->type = listType.at(readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes));
 									offset_tmp += nbBytes;
 
 									tagType->members.push_back(tagMember);
@@ -463,17 +525,17 @@ namespace LibXenoverse
 
 							if (tagType->flags & TagFlag::TF_Interfaces)
 							{
-								size_t nbTypeArray = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+								size_t nbTypeArray = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 								offset_tmp += nbBytes;
 
 								for (size_t i = 0; i < nbTypeArray; i++)
 								{
-									size_t index_tmp = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+									size_t index_tmp = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 									offset_tmp += nbBytes;
 									Havok_TagType* type_temp = listType.at(index_tmp);
 
 
-									size_t value = readPacked(buf + offset + offset_tmp, size - offset_tmp, nbBytes);
+									size_t value = readPacked(buf + offset + offset_tmp, bodySize - offset_tmp, nbBytes);
 									offset_tmp += nbBytes;
 
 									tagType->interfaces.push_back(Havok_TagInterface(type_temp, value));
@@ -623,6 +685,13 @@ namespace LibXenoverse
 	uint8_t* Havok::CreateFile(unsigned int* psize)
 	{
 		this->big_endian = true;
+		bool isVersion2020 = (version == "2020.01.00");
+		if ((!isVersion2020) && (version != "2015.01.00"))
+		{
+			printf("error: unsupported havok version: %s\n", version.c_str());
+			notifyError();
+			return nullptr;
+		}
 
 
 		////////////////////////////// preparation for Type binary parts.
@@ -703,7 +772,7 @@ namespace LibXenoverse
 		size_t nbNames = listTSTR.size();
 		Havok_TagType* type;
 
-		writePacked(listBytesTNam, nbTypes);						//first the number of types
+		writePacked(listBytesTNam, nbTypes, isVersion2020);						//first the number of types
 
 		for (size_t i = 1; i < nbTypes; i++)
 		{
@@ -726,11 +795,11 @@ namespace LibXenoverse
 				isfound = 0;
 			}
 
-			writePacked(listBytesTNam, isfound);
+			writePacked(listBytesTNam, isfound, isVersion2020);
 
 
 			size_t nbTemplate = type->listTemplate.size();
-			writePacked(listBytesTNam, nbTemplate);
+			writePacked(listBytesTNam, nbTemplate, isVersion2020);
 
 			for (size_t j = 0; j < nbTemplate; j++)
 			{
@@ -752,9 +821,9 @@ namespace LibXenoverse
 					LibXenoverse::notifyError();
 					isfound = 0;
 				}
-				writePacked(listBytesTNam, isfound);
+				writePacked(listBytesTNam, isfound, isVersion2020);
 
-				writePacked(listBytesTNam, template_tmp->value);
+				writePacked(listBytesTNam, template_tmp->value, isVersion2020);
 			}
 		}
 
@@ -767,6 +836,8 @@ namespace LibXenoverse
 		for (size_t i = 1; i < nbTypes; i++)
 		{
 			type = listType.at(i);
+			if (!type->hasBody)
+				continue;
 
 			writePacked(listBytesTBod, type->id);
 			writePacked(listBytesTBod, type->parent ? type->parent->id : 0);
@@ -784,7 +855,8 @@ namespace LibXenoverse
 			if (type->flags & TagFlag::TF_ByteSize)
 			{
 				writePacked(listBytesTBod, type->byteSize);
-				writePacked(listBytesTBod, type->alignment);
+				size_t encodedAlignment = (type->alignment & 0xFFF) | (type->alignmentFlags & 0xFFFFF000);
+				writePacked(listBytesTBod, encodedAlignment);
 			}
 
 			if (type->flags & TagFlag::TF_AbstractValue)
@@ -794,7 +866,14 @@ namespace LibXenoverse
 			if (type->flags & TagFlag::TF_Members)
 			{
 				size_t nbMembers = type->members.size();
-				writePacked(listBytesTBod, nbMembers);
+				if (nbMembers > 0xFFFF)
+				{
+					printf("Error: Type '%s' has too many members.\n", type->name.c_str());
+					LibXenoverse::notifyError();
+					return nullptr;
+				}
+				size_t encodedMemberCount = nbMembers | (isVersion2020 ? (type->memberCountFlags & 0xFFFF0000) : 0);
+				writePacked(listBytesTBod, encodedMemberCount);
 
 				for (size_t j = 0; j < nbMembers; j++)
 				{
@@ -896,14 +975,20 @@ namespace LibXenoverse
 		size_tmp += sizeof(Havok_PartHeader);
 
 		part_hdr->size = val32(size_tmp + 0x40000000);
-		strcpy(&(part_hdr->signature[0]), Havok_TSTR_SIGNATURE);
+		memcpy(&(part_hdr->signature[0]), isVersion2020 ? Havok_TST1_SIGNATURE : Havok_TSTR_SIGNATURE, 4);
 
 		for (size_t i = 0; i < nbNames; i++)
 		{
 			strcpy((char*)(buf_type + offset), listTSTR.at(i).c_str());
 			offset += listTSTR.at(i).length() + 1;
 		}
-		if (offset & 0x3) { offset += (0x4 - (offset & 0x3)); };		//padding 0
+		if (offset & 0x3)
+		{
+			size_t paddingSize = 0x4 - (offset & 0x3);
+			if (isVersion2020)
+				memset(buf_type + offset, 0xFF, paddingSize);
+			offset += paddingSize;
+		}
 
 
 
@@ -915,7 +1000,7 @@ namespace LibXenoverse
 		size_tmp += sizeof(Havok_PartHeader);
 
 		part_hdr->size = val32(size_tmp + 0x40000000);
-		strcpy(&(part_hdr->signature[0]), Havok_TNAM_SIGNATURE);
+		memcpy(&(part_hdr->signature[0]), isVersion2020 ? Havok_TNA1_SIGNATURE : Havok_TNAM_SIGNATURE, 4);
 
 		size_t nbElements = listBytesTNam.size();
 		for (size_t i = 0; i < nbElements; i++)
@@ -936,14 +1021,20 @@ namespace LibXenoverse
 		size_tmp += sizeof(Havok_PartHeader);
 
 		part_hdr->size = val32(size_tmp + 0x40000000);
-		strcpy(&(part_hdr->signature[0]), Havok_FSTR_SIGNATURE);
+		memcpy(&(part_hdr->signature[0]), isVersion2020 ? Havok_FST1_SIGNATURE : Havok_FSTR_SIGNATURE, 4);
 
 		for (size_t i = 0; i < nbFunctNames; i++)
 		{
 			strcpy((char*)(buf_type + offset), listFSTR.at(i).c_str());
 			offset += listFSTR.at(i).length() + 1;
 		}
-		if (offset & 0x3) { offset += (0x4 - (offset & 0x3)); };		//padding 0
+		if (offset & 0x3)
+		{
+			size_t paddingSize = 0x4 - (offset & 0x3);
+			if (isVersion2020)
+				memset(buf_type + offset, 0xFF, paddingSize);
+			offset += paddingSize;
+		}
 
 
 
@@ -957,7 +1048,7 @@ namespace LibXenoverse
 		size_tmp += sizeof(Havok_PartHeader);
 
 		part_hdr->size = val32(size_tmp + 0x40000000);
-		strcpy(&(part_hdr->signature[0]), Havok_TBOD_SIGNATURE);
+		memcpy(&(part_hdr->signature[0]), isVersion2020 ? Havok_TBDY_SIGNATURE : Havok_TBOD_SIGNATURE, 4);
 
 		nbElements = listBytesTBod.size();
 		for (size_t i = 0; i < nbElements; i++)
@@ -1142,11 +1233,11 @@ namespace LibXenoverse
 		part_hdr->size = val32(sizeof(Havok_PartHeader) + sizeof(Havok_Version) + 0x40000000);
 		strcpy(&(part_hdr->signature[0]), Havok_SDKV_SIGNATURE);
 
-		Havok_Version* version = (Havok_Version*)(buf + offset);
+		Havok_Version* versionInfo = (Havok_Version*)(buf + offset);
 		offset += sizeof(Havok_Version);
-		strcpy(&(version->year[0]), Havok_v2015_SIGNATURE);
-		strcpy(&(version->major[0]), Havok_major01_SIGNATURE);
-		strcpy(&(version->minor[0]), Havok_minor00_SIGNATURE);
+		memcpy(&(versionInfo->year[0]), isVersion2020 ? Havok_v2020_SIGNATURE : Havok_v2015_SIGNATURE, 4);
+		memcpy(&(versionInfo->major[0]), Havok_major01_SIGNATURE, 2);
+		memcpy(&(versionInfo->minor[0]), Havok_minor00_SIGNATURE, 2);
 
 
 		memcpy(buf + offset, buf_Data, size_Data);
@@ -1207,7 +1298,7 @@ namespace LibXenoverse
 	{
 		TiXmlElement* parent = new TiXmlElement("Havok");
 
-		parent->SetAttribute("version", string(Havok_v2015_SIGNATURE) + "." + Havok_major01_SIGNATURE + "." + Havok_minor00_SIGNATURE);
+		parent->SetAttribute("version", version);
 
 
 		TiXmlElement* node_data = new TiXmlElement("Data");
@@ -1280,8 +1371,14 @@ namespace LibXenoverse
 
 		node->SetAttribute("byteSize", byteSize);
 		node->SetAttribute("alignment", alignment);
+		if (alignmentFlags != 0)
+			node->SetAttribute("alignmentFlags", alignmentFlags);
 		if (abstractValue != 0)
 			node->SetAttribute("abstractValue", abstractValue);
+		if (!hasBody)
+			node->SetAttribute("hasBody", "false");
+		if (memberCountFlags != 0)
+			node->SetAttribute("memberCountFlags", memberCountFlags);
 
 		size_t nbElements = listTemplate.size();
 		for (size_t i = 0; i < nbElements; i++)
@@ -1540,6 +1637,17 @@ namespace LibXenoverse
 	{
 		Reset();
 
+		const char* xmlVersion = rootNode->Attribute("version");
+		if (xmlVersion)
+			version = xmlVersion;
+
+		if ((version != "2015.01.00") && (version != "2020.01.00"))
+		{
+			printf("error: unsupported havok version: %s\n", version.c_str());
+			notifyError();
+			return false;
+		}
+
 
 		//////////////////////////////  read Types Xml part to make Havok_TagType, Havok_TagMember, ...
 		TiXmlElement* node_Types = rootNode->FirstChildElement("ListType");
@@ -1720,6 +1828,9 @@ namespace LibXenoverse
 		name = "None";
 		version = 0;
 		abstractValue = 0;
+		hasBody = true;
+		memberCountFlags = 0;
+		alignmentFlags = 0;
 
 		node->QueryUnsignedAttribute("id", &id);
 		node->QueryStringAttribute("name", &name);
@@ -1727,12 +1838,34 @@ namespace LibXenoverse
 		node->QueryUnsignedAttribute("subTypeFlags", &subTypeFlags);
 		node->QueryUnsignedAttribute("byteSize", &byteSize);
 		node->QueryUnsignedAttribute("alignment", &alignment);
+		if (node->Attribute("alignmentFlags"))
+		{
+			node->QueryUnsignedAttribute("alignmentFlags", &alignmentFlags);
+			alignmentFlags &= 0xFFFFF000;
+		}
+		else if (alignment > 0xFFF)
+		{
+			// Compatibility with XML exported before the 2020 alignment metadata
+			// was represented separately from the actual alignment value.
+			alignmentFlags = alignment & 0xFFFFF000;
+			alignment &= 0xFFF;
+		}
 
 		if (node->Attribute("version"))
 			node->QueryUnsignedAttribute("version", &version);
 
 		if (node->Attribute("abstractValue"))
 			node->QueryUnsignedAttribute("abstractValue", &abstractValue);
+
+		const char* hasBodyAttribute = node->Attribute("hasBody");
+		if (hasBodyAttribute)
+			hasBody = ((strcmp(hasBodyAttribute, "false") != 0) && (strcmp(hasBodyAttribute, "0") != 0));
+
+		if (node->Attribute("memberCountFlags"))
+		{
+			node->QueryUnsignedAttribute("memberCountFlags", &memberCountFlags);
+			memberCountFlags &= 0xFFFF0000;
+		}
 
 		return;
 	}
@@ -2995,34 +3128,92 @@ namespace LibXenoverse
 	/*-------------------------------------------------------------------------------\
 	|                             readPacked			                             |
 	\-------------------------------------------------------------------------------*/
-	uint32_t Havok::readPacked(const uint8_t* buf, size_t size, size_t& nbBytes)				//apparently the 3 first left bits is for definied the size (in bytes) of the value:
+	uint32_t Havok::readPacked(const uint8_t* buf, size_t size, size_t& nbBytes, bool extended)	//apparently the 3 first left bits is for definied the size (in bytes) of the value:
 	{
+		if (size == 0)
+		{
+			nbBytes = 0;
+			return 0;
+		}
+
 		uint32_t value = buf[0];
 		nbBytes = 1;
+
+		// Havok 2020 adds an escape byte followed by an unmasked big-endian
+		// uint32. It is used for template constants such as 0x7fffffff.
+		if ((extended) && (value == 0xE8))
+		{
+			if (size < 5)
+			{
+				nbBytes = 0;
+				return 0;
+			}
+
+			nbBytes = 5;
+			return ((static_cast<uint32_t>(buf[1]) << 24) |
+				(static_cast<uint32_t>(buf[2]) << 16) |
+				(static_cast<uint32_t>(buf[3]) << 8) |
+				static_cast<uint32_t>(buf[4]));
+		}
+		if ((extended) && (value > 0xE8))
+		{
+			printf("error: invalid extended packed value prefix: 0x%02X\n", value);
+			notifyError();
+			nbBytes = 0;
+			return 0;
+		}
 
 		if ((value & 0x80) == 0)				//uint8
 			return value;
 
 		if ((value & 0x40) == 0)				//uint16
 		{
+			if (size < 2)
+			{
+				nbBytes = 0;
+				return 0;
+			}
+
 			nbBytes = 2;
 			return (((value << 8) | (buf[1])) & 0x3fff);
 		}
 
 		if ((value & 0x20) == 0)				//uint24
 		{
+			if (size < 3)
+			{
+				nbBytes = 0;
+				return 0;
+			}
+
 			nbBytes = 3;
 			return (((value << 16) | (buf[1] << 8) | (buf[2])) & 0x1fffff);
 		}
 
+		if (size < 4)
+		{
+			nbBytes = 0;
+			return 0;
+		}
+
 		nbBytes = 4;						//uint32
-		return (((value << 24) | (buf[1] << 16) | (buf[2] << 8) | (buf[3])) & 0x1fffffff);
+		return (((value << 24) | (buf[1] << 16) | (buf[2] << 8) | (buf[3])) & (extended ? 0x07FFFFFF : 0x1FFFFFFF));
 	}
 	/*-------------------------------------------------------------------------------\
 	|                             writePacked			                             |
 	\-------------------------------------------------------------------------------*/
-	void Havok::writePacked(std::vector<byte>& listBytesTNam, uint32_t value)				//apparently the 3 first left bits is for definied the size (in bytes) of the value:
+	void Havok::writePacked(std::vector<byte>& listBytesTNam, uint32_t value, bool extended)	//apparently the 3 first left bits is for definied the size (in bytes) of the value:
 	{
+		if ((extended) && (value >= 0x08000000))
+		{
+			listBytesTNam.push_back(0xE8);
+			listBytesTNam.push_back((value >> 24) & 0xFF);
+			listBytesTNam.push_back((value >> 16) & 0xFF);
+			listBytesTNam.push_back((value >> 8) & 0xFF);
+			listBytesTNam.push_back(value & 0xFF);
+			return;
+		}
+
 		if (value > 0x1fffffff)
 			value = value & 0x1fffffff;
 

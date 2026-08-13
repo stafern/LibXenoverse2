@@ -190,7 +190,8 @@ namespace LibXenoverse
 	\-------------------------------------------------------------------------------*/
 	size_t Havok_TagType::subType()
 	{
-		return subTypeFlags & Havok::TagSubType::TST_TypeMask;
+		size_t subtype = subTypeFlags & Havok::TagSubType::TST_TypeMask;
+		return (subtype == Havok::TagSubType::TST_StringPtr) ? Havok::TagSubType::TST_String : subtype;
 	}
 	/*-------------------------------------------------------------------------------\
 	|                             allMembers			                             |

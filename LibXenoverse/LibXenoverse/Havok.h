@@ -271,6 +271,7 @@ public:
 		TST_Class = 0x7,
 		TST_Array = 0x8,
 		TST_Tuple = 0x28,
+		TST_StringPtr = 0x83,
 		TST_TypeMask = 0xff,
 		TST_IsSigned = 0x200,
 		TST_Float32 = 0x1746,

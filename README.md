@@ -4,9 +4,9 @@ Then, adjustments are made for conversion of SHKT files used in EDF5 and EDF6.<b
 
 ### Progress
 EDF5 SHKT -> XML : Yes<br>
-EDF5 XML -> SHKT : No(working on)<br>
-EDF6 SHKT -> XML : No(working on)<br>
-EDF6 XML -> SHKT : No<br>
+EDF5 XML -> SHKT : Yes<br>
+EDF6 SHKT -> XML : Yes<br>
+EDF6 XML -> SHKT : Yes<br>
 
 ### Attention
 This is a heavily customized personal fork of the original project. <br>

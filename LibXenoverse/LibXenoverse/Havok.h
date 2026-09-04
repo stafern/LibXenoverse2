@@ -303,6 +303,13 @@ private:
 
 	Havok_TagObject* rootObject;
 	std::vector<Havok_TagType*> listType;
+
+	// The TYPE section is semantically order-independent, but its string-table
+	// and type-body order affects the exact packed binary representation.  Keep
+	// the source order so an unchanged XML round trip can reproduce the input.
+	std::vector<string> typeStringTable;
+	std::vector<string> fieldStringTable;
+	std::vector<size_t> typeBodyOrder;
 	
 	std::vector<Havok_TagItem*> listItem;			//list of item is not really necessary (because we could find with analyze object hierarchy), but it's for making binary in the same order than original. Todo find order from object hierrachy and remove it
 

@@ -26,6 +26,9 @@ namespace LibXenoverse
 	void Havok::Reset()
 	{
 		version = "2015.01.00";
+		typeStringTable.clear();
+		fieldStringTable.clear();
+		typeBodyOrder.clear();
 
 		// Objects reached through pointer and array members may be shared by
 		// several parents. Collect the graph first, detach every edge, and then
@@ -274,6 +277,7 @@ namespace LibXenoverse
 		size_t sizeOfData = 0;
 		std::vector<string> listTSTR;
 		std::vector<string> listFSTR;
+		std::vector<size_t> listTypeBodyOrder;
 
 		auto readStringTable = [buf](std::vector<string>& strings, size_t tableOffset, size_t tableSize, bool hasFfPadding)
 		{
@@ -431,6 +435,8 @@ namespace LibXenoverse
 
 							if (typeIndex == 0)						//sequence of 0 padding
 								continue;
+
+							listTypeBodyOrder.push_back(typeIndex);
 
 							Havok_TagType* tagType = listType.at(typeIndex);
 							tagType->hasBody = true;
@@ -623,6 +629,11 @@ namespace LibXenoverse
 
 
 
+		typeStringTable = listTSTR;
+		fieldStringTable = listFSTR;
+		typeBodyOrder = listTypeBodyOrder;
+
+
 		if ((offsetData != (size_t)-1) && (listItem.size() != 0))			//now we have the data and the informations about it.
 		{
 			offset = offsetData;
@@ -695,7 +706,7 @@ namespace LibXenoverse
 
 
 		////////////////////////////// preparation for Type binary parts.
-		std::vector<string> listTSTR;
+		std::vector<string> listTSTR = typeStringTable;
 		size_t nbTemplate;
 		string str;
 
@@ -741,7 +752,7 @@ namespace LibXenoverse
 
 
 
-		std::vector<string> listFSTR;
+		std::vector<string> listFSTR = fieldStringTable;
 		size_t nbMembers;
 
 		for (size_t i = 1; i < nbTypes; i++)						//it's all names of members
@@ -832,12 +843,34 @@ namespace LibXenoverse
 		//TBOD
 		std::vector<byte> listBytesTBod;
 		size_t nbFunctNames = listFSTR.size();
+		std::vector<Havok_TagType*> listTypeBody;
+		std::set<size_t> addedTypeBodyIds;
 
+		for (size_t bodyTypeId : typeBodyOrder)
+		{
+			for (size_t i = 1; i < nbTypes; i++)
+			{
+				type = listType.at(i);
+				if ((type->id == bodyTypeId) && (type->hasBody) && addedTypeBodyIds.insert(type->id).second)
+				{
+					listTypeBody.push_back(type);
+					break;
+				}
+			}
+		}
+
+		// XML files produced before order metadata was added, and XML files with
+		// newly added types, keep the deterministic type-id fallback order.
 		for (size_t i = 1; i < nbTypes; i++)
 		{
 			type = listType.at(i);
-			if (!type->hasBody)
-				continue;
+			if ((type->hasBody) && addedTypeBodyIds.insert(type->id).second)
+				listTypeBody.push_back(type);
+		}
+
+		for (Havok_TagType* bodyType : listTypeBody)
+		{
+			type = bodyType;
 
 			writePacked(listBytesTBod, type->id);
 			writePacked(listBytesTBod, type->parent ? type->parent->id : 0);
@@ -1337,6 +1370,42 @@ namespace LibXenoverse
 			node_ItemList->LinkEndChild(listItem.at(i)->exportXml());
 
 
+		// Preserve the otherwise-semantic ordering of the TYPE section.  Keep
+		// this optional extension after the legacy nodes so positional readers
+		// still see Data, ListType and ListItem in their original order.
+		if ((!typeStringTable.empty()) || (!fieldStringTable.empty()) || (!typeBodyOrder.empty()))
+		{
+			TiXmlElement* node_serialization = new TiXmlElement("TypeSerialization");
+			node_serialization->SetAttribute("version", 1);
+			parent->LinkEndChild(node_serialization);
+
+			auto exportStringTable = [node_serialization](const char* name, const std::vector<string>& table)
+			{
+				TiXmlElement* node_table = new TiXmlElement(name);
+				node_serialization->LinkEndChild(node_table);
+
+				for (const string& value : table)
+				{
+					TiXmlElement* node_string = new TiXmlElement("String");
+					node_string->SetAttribute("value", value);
+					node_table->LinkEndChild(node_string);
+				}
+			};
+
+			exportStringTable("TSTR", typeStringTable);
+			exportStringTable("FSTR", fieldStringTable);
+
+			TiXmlElement* node_bodyOrder = new TiXmlElement("TBDY");
+			node_serialization->LinkEndChild(node_bodyOrder);
+			for (size_t typeId : typeBodyOrder)
+			{
+				TiXmlElement* node_type = new TiXmlElement("TypeRef");
+				node_type->SetAttribute("id", static_cast<unsigned int>(typeId));
+				node_bodyOrder->LinkEndChild(node_type);
+			}
+		}
+
+
 		return parent;
 	}
 	/*-------------------------------------------------------------------------------\
@@ -1670,6 +1739,49 @@ namespace LibXenoverse
 			printf("Cannot find\"ListItem\" in xml.\n");
 			notifyError();
 			return false;
+		}
+
+		TiXmlElement* node_serialization = rootNode->FirstChildElement("TypeSerialization");
+		if (node_serialization)
+		{
+			auto importStringTable = [](TiXmlElement* node_table, std::vector<string>& table)
+			{
+				if (!node_table)
+					return;
+
+				for (TiXmlElement* node = node_table->FirstChildElement("String"); node; node = node->NextSiblingElement("String"))
+				{
+					const char* value = node->Attribute("value");
+					if (value)
+						table.push_back(value);
+				}
+			};
+
+			importStringTable(node_serialization->FirstChildElement("TSTR"), typeStringTable);
+			importStringTable(node_serialization->FirstChildElement("FSTR"), fieldStringTable);
+
+			TiXmlElement* node_bodyOrder = node_serialization->FirstChildElement("TBDY");
+			if (node_bodyOrder)
+			{
+				const char* nodeName = "TypeRef";
+				TiXmlElement* firstNode = node_bodyOrder->FirstChildElement(nodeName);
+				if (!firstNode)
+				{
+					// Accept XML emitted by early development builds of this extension.
+					nodeName = "Type";
+					firstNode = node_bodyOrder->FirstChildElement(nodeName);
+				}
+
+				for (TiXmlElement* node = firstNode; node; node = node->NextSiblingElement(nodeName))
+				{
+					unsigned int typeId = 0;
+					if (node->Attribute("id"))
+					{
+						node->QueryUnsignedAttribute("id", &typeId);
+						typeBodyOrder.push_back(typeId);
+					}
+				}
+			}
 		}
 
 		for (TiXmlElement* node = node_Types->FirstChildElement("Type"); node; node = node->NextSiblingElement("Type"))
